@@ -1,0 +1,30 @@
+{
+  "track_id": "track-001-project-scaffold",
+  "title": "Project scaffold and tooling",
+  "type": "feature",
+  "status": "done",
+  "created_at": "2026-06-19",
+  "owner": "CarrotDay",
+  "summary": "Create the initial FastAPI backend project structure, dependency configuration, PostgreSQL Docker runtime, Alembic setup, and Pytest foundation without implementing domain workflows.",
+  "related_docs": [
+    "product-requirements.md",
+    "backend-architecture.md",
+    "coding-rules.md",
+    "api-design.md",
+    "database-schema.md",
+    "conductor/product.md",
+    "conductor/tech-stack.md",
+    "conductor/workflow.md",
+    "conductor/code_styleguides/backend.md",
+    "conductor/tracks/track-001-project-scaffold/implementation-notes.md"
+  ],
+  "depends_on": [],
+  "blocks": [
+    "track-002-auth-users",
+    "track-003-expense-core",
+    "track-004-manager-approval",
+    "track-005-accounting-payment",
+    "track-006-audit-history",
+    "track-007-test-hardening"
+  ]
+}

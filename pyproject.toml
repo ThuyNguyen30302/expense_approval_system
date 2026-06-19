@@ -1,0 +1,36 @@
+[project]
+name = "expense-approval-system"
+version = "0.1.0"
+description = "FastAPI backend for company expense request approval and payment tracking."
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.13.2",
+    "email-validator>=2.2.0",
+    "fastapi>=0.115.0",
+    "httpx>=0.27.2",
+    "bcrypt>=4.1.0",
+    "psycopg[binary]>=3.2.1",
+    "pydantic-settings>=2.5.2",
+    "python-dotenv>=1.0.1",
+    "python-jose[cryptography]>=3.3.0",
+    "sqlalchemy>=2.0.35",
+    "uvicorn[standard]>=0.30.6"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.3"
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["alembic*", "conductor*", "tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

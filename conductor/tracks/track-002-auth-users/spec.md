@@ -24,6 +24,7 @@ Future expense workflow tracks require a reliable identity layer before they can
 - Add FastAPI dependencies for current authenticated user and role checks.
 - Add authentication endpoints for registration, login, and current-user profile.
 - Add admin user management endpoints for creating, listing, reading, updating, and deactivating users.
+- Add a repeatable development/demo bootstrap path for creating the first admin user.
 - Add schemas, repositories, and services that follow the documented architecture.
 - Add API and service tests for auth success paths, permission failures, duplicate emails, inactive users, and protected endpoint behavior.
 - Keep response bodies free of password hashes and secrets.
@@ -98,6 +99,18 @@ Required behavior:
 - Registration rejects duplicate emails.
 - Registration returns the public user response shape.
 - Registration must not allow clients to self-assign elevated roles.
+
+### Development Admin Bootstrap
+
+Provide a documented CLI command or seed script that creates the first admin for development/demo usage.
+
+Required behavior:
+
+- The command is repeatable.
+- The command creates an admin user when the email does not exist.
+- The command updates, reactivates, and promotes the user when the email already exists.
+- The command refuses to run when `APP_ENV=production`.
+- Self-service registration remains employee-only.
 
 ### Current User
 
@@ -351,7 +364,7 @@ No expense-related tables should be added in this track.
 
 ## Open Decisions
 
-- Decide whether the initial implementation should include a development-only admin bootstrap command or leave admin creation to direct database setup/test fixtures.
+- Resolved: include a development/demo CLI command for repeatable first-admin bootstrap.
 - Decide whether `GET /api/v1/users/{user_id}` should return `404` or `403` when a non-admin requests another user's record. Recommended default: `403` because the resource type is not sensitive in this portfolio API, but hidden-resource behavior can be adopted later.
 - Decide whether admin `PATCH /api/v1/users/{user_id}` should allow reactivation by setting `is_active=true`. Recommended default: allow it and clear `deactivated_at`.
 - Decide whether to use database-native UUID generation or application-generated UUIDs. Recommended default: application-generated UUIDs for simple local setup without PostgreSQL extensions.

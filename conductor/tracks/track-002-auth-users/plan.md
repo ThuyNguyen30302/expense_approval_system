@@ -76,6 +76,13 @@
 - [x] Add admin-only dependency.
 - [x] Keep dependencies reusable for later expense workflow tracks.
 
+## Phase 7A: Development Bootstrap
+
+- [x] Add a repeatable admin seed service.
+- [x] Add a CLI command for development/demo first-admin bootstrap.
+- [x] Block the seed command when `APP_ENV=production`.
+- [x] Document the seed command for developers.
+
 ## Phase 8: Routes And App Registration
 
 - [x] Add `app/api/routes/auth.py`.
@@ -114,6 +121,7 @@
 - [x] Test `/auth/me` fails without a token.
 - [x] Test `/auth/me` fails with an invalid or expired token.
 - [x] Test admin can create users with elevated roles.
+- [x] Test development admin seed creates and updates an admin user.
 - [x] Test non-admin cannot create elevated users.
 - [x] Test admin can list users with pagination.
 - [x] Test user list filters by role and active status.

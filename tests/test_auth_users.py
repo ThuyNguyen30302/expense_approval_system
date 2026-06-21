@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.core.security import verify_password
 from app.models.user import User
+from app.services.bootstrap import seed_admin_user
 
 
 def register_user(
@@ -115,6 +117,47 @@ def test_me_rejects_invalid_token(client: TestClient) -> None:
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "auth_invalid_token"
+
+
+def test_openapi_documents_http_bearer_auth(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+
+    security_schemes = schema["components"]["securitySchemes"]
+    assert security_schemes["HTTPBearer"]["type"] == "http"
+    assert security_schemes["HTTPBearer"]["scheme"] == "bearer"
+
+
+def test_seed_admin_creates_and_updates_admin_user(db_session: Session) -> None:
+    user, created = seed_admin_user(
+        db_session,
+        email="Admin@Example.com",
+        password="first-password",
+        full_name="Admin User",
+    )
+
+    assert created is True
+    assert user.email == "admin@example.com"
+    assert user.role == "admin"
+    assert user.is_active is True
+
+    user.role = "employee"
+    user.is_active = False
+    db_session.commit()
+
+    updated_user, updated_created = seed_admin_user(
+        db_session,
+        email="admin@example.com",
+        password="second-password",
+        full_name="Updated Admin",
+    )
+
+    assert updated_created is False
+    assert updated_user.id == user.id
+    assert updated_user.full_name == "Updated Admin"
+    assert updated_user.role == "admin"
+    assert updated_user.is_active is True
+    assert updated_user.deactivated_at is None
+    assert verify_password("second-password", updated_user.hashed_password)
 
 
 def test_non_admin_cannot_create_users(client: TestClient) -> None:

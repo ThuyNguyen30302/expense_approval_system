@@ -2,7 +2,7 @@ from collections.abc import Callable, Generator
 from uuid import UUID
 
 from fastapi import Depends
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
@@ -12,7 +12,7 @@ from app.models.user import User, UserRole
 from app.repositories.users import UserRepository
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -20,16 +20,17 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def get_current_user(
-    token: str | None = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    if token is None:
+    if credentials is None:
         raise AppError(
             status_code=401,
             code="auth_not_authenticated",
             message="Authentication credentials were not provided.",
         )
 
+    token = credentials.credentials
     payload = decode_access_token(token)
     try:
         user_id = UUID(str(payload["sub"]))

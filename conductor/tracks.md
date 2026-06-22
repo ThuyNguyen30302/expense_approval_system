@@ -18,13 +18,11 @@ This file tracks project work using a Conductor-inspired workflow.
 
 | Track ID | Title | Type | Status | Notes |
 | --- | --- | --- | --- | --- |
-| `track-002-auth-users` | Authentication and user management | feature | verified | Implemented and verified with Pytest, Alembic offline SQL rendering, OpenAPI inspection, and Docker Compose config. |
 
 ## Proposed Tracks
 
 | Track ID | Title | Type | Status | Notes |
 | --- | --- | --- | --- | --- |
-| `track-003-expense-core` | Expense request core workflow | feature | proposed | Implement expense creation, draft, update, submit, list, and detail endpoints. |
 | `track-004-manager-approval` | Manager approval workflow | feature | proposed | Implement manager approve, reject, and return actions with audit logs. |
 | `track-005-accounting-payment` | Accounting review and payment tracking | feature | proposed | Implement accountant approval, rejection, payment pending, and paid transitions. |
 | `track-006-audit-history` | Audit history API | feature | proposed | Expose expense audit log retrieval and ensure status transitions are recorded. |
@@ -35,3 +33,5 @@ This file tracks project work using a Conductor-inspired workflow.
 | Track ID | Title | Type | Status | Notes |
 | --- | --- | --- | --- | --- |
 | `track-001-project-scaffold` | Project scaffold and tooling | feature | done | FastAPI scaffold, PostgreSQL config, DB infrastructure, Alembic foundation, Docker setup, and smoke tests completed. |
+| `track-002-auth-users` | Authentication and user management | feature | done | Auth, user management, reusable role dependencies, dev admin bootstrap, tests, and review follow-ups completed. |
+| `track-003-expense-core` | Expense request core workflow | feature | done | Expense core workflow, receipt metadata, audit logging, PostgreSQL JSONB metadata, and verification completed. |

@@ -1,11 +1,11 @@
 {
-  "track_id": "track-002-auth-users",
-  "title": "Authentication and user management",
+  "track_id": "track-003-expense-core",
+  "title": "Expense request core workflow",
   "type": "feature",
   "status": "done",
-  "created_at": "2026-06-19",
+  "created_at": "2026-06-22",
   "owner": "CarrotDay",
-  "summary": "Implement the authentication and user foundation: user persistence, password hashing, JWT access tokens, current-user dependencies, role checks, self-service auth endpoints, and admin user management APIs.",
+  "summary": "Implement the foundational expense request workflow: expense persistence, receipt metadata persistence, create draft, list, detail, update eligible drafts/returns, submit, cancel, visibility rules, and basic audit logging for core state transitions.",
   "related_docs": [
     "product-requirements.md",
     "backend-architecture.md",
@@ -18,10 +18,10 @@
     "conductor/code_styleguides/backend.md"
   ],
   "depends_on": [
-    "track-001-project-scaffold"
+    "track-001-project-scaffold",
+    "track-002-auth-users"
   ],
   "blocks": [
-    "track-003-expense-core",
     "track-004-manager-approval",
     "track-005-accounting-payment",
     "track-006-audit-history",

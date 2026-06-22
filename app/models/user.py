@@ -70,3 +70,8 @@ class User(Base):
         "User",
         back_populates="manager",
     )
+    expenses: Mapped[list["Expense"]] = relationship(
+        "Expense",
+        foreign_keys="Expense.requester_id",
+        back_populates="requester",
+    )

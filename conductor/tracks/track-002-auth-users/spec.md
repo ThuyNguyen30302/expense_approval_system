@@ -6,7 +6,7 @@
 
 ## Status
 
-`verified`
+`done`
 
 ## Problem Statement
 

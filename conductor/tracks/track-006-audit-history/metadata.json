@@ -1,0 +1,22 @@
+{
+  "track_id": "track-006-audit-history",
+  "title": "Audit history API",
+  "type": "feature",
+  "status": "done",
+  "created_at": "2026-06-22",
+  "owner": "CarrotDay",
+  "summary": "Expose paginated expense audit history with the same role-based visibility rules used by expense detail access.",
+  "related_docs": [
+    "product-requirements.md",
+    "api-design.md",
+    "database-schema.md",
+    "backend-architecture.md"
+  ],
+  "depends_on": [
+    "track-004-manager-approval",
+    "track-005-accounting-payment"
+  ],
+  "blocks": [
+    "track-007-test-hardening"
+  ]
+}

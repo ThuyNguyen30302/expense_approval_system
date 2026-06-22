@@ -1,7 +1,7 @@
 from datetime import date
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.expense import Expense
@@ -32,6 +32,8 @@ class ExpenseRepository:
         offset: int,
         requester_id: UUID | None = None,
         visible_requester_id: UUID | None = None,
+        visible_manager_id: UUID | None = None,
+        accounting_visible: bool = False,
         status: str | None = None,
         category: str | None = None,
         from_date: date | None = None,
@@ -40,6 +42,8 @@ class ExpenseRepository:
         statement = self._filtered_select(
             requester_id=requester_id,
             visible_requester_id=visible_requester_id,
+            visible_manager_id=visible_manager_id,
+            accounting_visible=accounting_visible,
             status=status,
             category=category,
             from_date=from_date,
@@ -61,14 +65,33 @@ class ExpenseRepository:
         *,
         requester_id: UUID | None,
         visible_requester_id: UUID | None,
+        visible_manager_id: UUID | None,
+        accounting_visible: bool,
         status: str | None,
         category: str | None,
         from_date: date | None,
         to_date: date | None,
     ) -> Select[tuple[Expense]]:
         statement = select(Expense)
+        visibility_conditions = []
         if visible_requester_id is not None:
-            statement = statement.where(Expense.requester_id == visible_requester_id)
+            visibility_conditions.append(Expense.requester_id == visible_requester_id)
+        if visible_manager_id is not None:
+            visibility_conditions.append(Expense.assigned_manager_id == visible_manager_id)
+        if accounting_visible:
+            visibility_conditions.append(
+                Expense.status.in_(
+                    [
+                        "manager_approved",
+                        "accountant_approved",
+                        "accountant_rejected",
+                        "payment_pending",
+                        "paid",
+                    ]
+                )
+            )
+        if visibility_conditions:
+            statement = statement.where(or_(*visibility_conditions))
         if requester_id is not None:
             statement = statement.where(Expense.requester_id == requester_id)
         if status is not None:

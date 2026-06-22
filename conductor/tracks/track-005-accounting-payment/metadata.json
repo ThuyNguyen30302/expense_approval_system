@@ -1,0 +1,22 @@
+{
+  "track_id": "track-005-accounting-payment",
+  "title": "Accounting review and payment tracking",
+  "type": "feature",
+  "status": "done",
+  "created_at": "2026-06-22",
+  "owner": "CarrotDay",
+  "summary": "Implement accounting approval, accounting rejection, return-to-employee, payment pending, and paid transitions with payment records, audit logging, and tests.",
+  "related_docs": [
+    "product-requirements.md",
+    "api-design.md",
+    "database-schema.md",
+    "backend-architecture.md"
+  ],
+  "depends_on": [
+    "track-004-manager-approval"
+  ],
+  "blocks": [
+    "track-006-audit-history",
+    "track-007-test-hardening"
+  ]
+}

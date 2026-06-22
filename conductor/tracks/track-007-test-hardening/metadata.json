@@ -1,0 +1,21 @@
+{
+  "track_id": "track-007-test-hardening",
+  "title": "Workflow and authorization test hardening",
+  "type": "quality",
+  "status": "done",
+  "created_at": "2026-06-22",
+  "owner": "CarrotDay",
+  "summary": "Review and improve workflow code, harden tests around role boundaries, end-to-end status progression, and small Python correctness issues.",
+  "related_docs": [
+    "product-requirements.md",
+    "api-design.md",
+    "backend-architecture.md",
+    "coding-rules.md"
+  ],
+  "depends_on": [
+    "track-004-manager-approval",
+    "track-005-accounting-payment",
+    "track-006-audit-history"
+  ],
+  "blocks": []
+}

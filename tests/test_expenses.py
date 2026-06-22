@@ -1,9 +1,14 @@
 from datetime import date
+from uuid import UUID
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.core.security import hash_password
+from app.models.approval_decision import ApprovalDecision
 from app.models.audit_log import AuditLog
+from app.models.payment import Payment
+from app.models.user import User
 from app.services.bootstrap import seed_admin_user
 from tests.test_auth_users import auth_headers, login_user, register_user
 
@@ -53,6 +58,46 @@ def create_admin_token(client: TestClient, db_session: Session) -> str:
 
 def audit_event_count(db_session: Session, event_type: str) -> int:
     return db_session.query(AuditLog).filter(AuditLog.event_type == event_type).count()
+
+
+def create_user_with_role(
+    db_session: Session,
+    *,
+    email: str,
+    role: str,
+    manager_id: object | None = None,
+) -> User:
+    user = User(
+        email=email,
+        full_name=email.split("@")[0].replace(".", " ").title(),
+        hashed_password=hash_password("strong-password"),
+        role=role,
+        manager_id=manager_id,
+        is_active=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+def create_workflow_users(db_session: Session) -> tuple[User, str, User, str, User, str]:
+    manager = create_user_with_role(db_session, email="manager@example.com", role="manager")
+    accountant = create_user_with_role(db_session, email="accountant@example.com", role="accountant")
+    employee = create_user_with_role(
+        db_session,
+        email="employee@example.com",
+        role="employee",
+        manager_id=manager.id,
+    )
+    return (
+        employee,
+        "employee@example.com",
+        manager,
+        "manager@example.com",
+        accountant,
+        "accountant@example.com",
+    )
 
 
 def test_employee_can_create_draft_expense_with_receipt(client: TestClient, db_session: Session) -> None:
@@ -303,3 +348,264 @@ def test_date_range_filter_accepts_iso_dates(client: TestClient, db_session: Ses
 
     assert response.status_code == 200
     assert response.json()["total"] == 1
+
+
+def test_manager_accounting_payment_happy_path_and_audit_history(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    employee, employee_email, manager, manager_email, _accountant, accountant_email = create_workflow_users(db_session)
+    employee_token = login_user(client, employee_email)
+    manager_token = login_user(client, manager_email)
+    accountant_token = login_user(client, accountant_email)
+
+    expense = create_expense(client, employee_token)
+    assert expense["assigned_manager_id"] == str(manager.id)
+
+    submit_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/submit",
+        headers=auth_headers(employee_token),
+    )
+    assert submit_response.status_code == 200
+
+    manager_list_response = client.get("/api/v1/expenses?status=submitted", headers=auth_headers(manager_token))
+    assert manager_list_response.status_code == 200
+    assert manager_list_response.json()["total"] == 1
+
+    manager_approval_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/manager-approval",
+        headers=auth_headers(manager_token),
+        json={"comment": "Approved for client meeting."},
+    )
+    assert manager_approval_response.status_code == 200
+    assert manager_approval_response.json()["status"] == "manager_approved"
+    assert manager_approval_response.json()["manager_decided_at"] is not None
+
+    accountant_list_response = client.get("/api/v1/expenses?status=manager_approved", headers=auth_headers(accountant_token))
+    assert accountant_list_response.status_code == 200
+    assert accountant_list_response.json()["total"] == 1
+
+    accounting_approval_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/accounting-approval",
+        headers=auth_headers(accountant_token),
+        json={"comment": "Receipt and policy checks completed."},
+    )
+    assert accounting_approval_response.status_code == 200
+    assert accounting_approval_response.json()["status"] == "accountant_approved"
+    assert accounting_approval_response.json()["accountant_decided_at"] is not None
+
+    payment_pending_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/payment-pending",
+        headers=auth_headers(accountant_token),
+        json={"payment_method": "bank_transfer", "notes": "Scheduled in weekly payment batch."},
+    )
+    assert payment_pending_response.status_code == 200
+    assert payment_pending_response.json()["status"] == "payment_pending"
+
+    paid_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/paid",
+        headers=auth_headers(accountant_token),
+        json={
+            "payment_method": "bank_transfer",
+            "payment_reference": "BANK-REF-123",
+            "notes": "Paid in June reimbursement batch.",
+        },
+    )
+    assert paid_response.status_code == 200
+    assert paid_response.json()["status"] == "paid"
+    assert paid_response.json()["paid_at"] is not None
+
+    expense_id = UUID(expense["id"])
+    decisions = db_session.query(ApprovalDecision).filter(ApprovalDecision.expense_id == expense_id).all()
+    assert [(decision.stage, decision.decision) for decision in decisions] == [
+        ("manager", "approved"),
+        ("accounting", "approved"),
+    ]
+    assert db_session.query(Payment).filter(Payment.expense_id == expense_id).count() == 2
+    assert audit_event_count(db_session, "manager_approved") == 1
+    assert audit_event_count(db_session, "accountant_approved") == 1
+    assert audit_event_count(db_session, "payment_pending") == 1
+    assert audit_event_count(db_session, "expense_paid") == 1
+
+    audit_response = client.get(
+        f"/api/v1/expenses/{expense['id']}/audit-log?limit=3",
+        headers=auth_headers(employee_token),
+    )
+    assert audit_response.status_code == 200
+    assert audit_response.json()["total"] == 6
+    assert audit_response.json()["limit"] == 3
+    assert [item["event_type"] for item in audit_response.json()["items"]] == [
+        "expense_created",
+        "expense_submitted",
+        "manager_approved",
+    ]
+
+
+def test_manager_reject_and_return_paths_enforce_reasons_and_statuses(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    _employee, employee_email, _manager, manager_email, _accountant, accountant_email = create_workflow_users(db_session)
+    employee_token = login_user(client, employee_email)
+    manager_token = login_user(client, manager_email)
+    accountant_token = login_user(client, accountant_email)
+
+    expense = create_expense(client, employee_token)
+    missing_reason_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/manager-rejection",
+        headers=auth_headers(manager_token),
+        json={},
+    )
+    assert missing_reason_response.status_code == 422
+
+    invalid_status_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/manager-rejection",
+        headers=auth_headers(manager_token),
+        json={"reason": "Not submitted."},
+    )
+    assert invalid_status_response.status_code == 409
+
+    client.post(f"/api/v1/expenses/{expense['id']}/submit", headers=auth_headers(employee_token))
+    reject_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/manager-rejection",
+        headers=auth_headers(manager_token),
+        json={"reason": "Receipt does not match submitted amount."},
+    )
+    assert reject_response.status_code == 200
+    assert reject_response.json()["status"] == "manager_rejected"
+
+    returned_expense = create_expense(client, employee_token, title="Needs clearer receipt")
+    client.post(f"/api/v1/expenses/{returned_expense['id']}/submit", headers=auth_headers(employee_token))
+    return_response = client.post(
+        f"/api/v1/expenses/{returned_expense['id']}/return-to-employee",
+        headers=auth_headers(manager_token),
+        json={"reason": "Please attach a clearer receipt."},
+    )
+    assert return_response.status_code == 200
+    assert return_response.json()["status"] == "returned_to_employee"
+
+    resubmit_response = client.post(
+        f"/api/v1/expenses/{returned_expense['id']}/submit",
+        headers=auth_headers(employee_token),
+    )
+    assert resubmit_response.status_code == 200
+    assert resubmit_response.json()["status"] == "submitted"
+
+    client.post(
+        f"/api/v1/expenses/{returned_expense['id']}/manager-approval",
+        headers=auth_headers(manager_token),
+        json={},
+    )
+    accounting_return_response = client.post(
+        f"/api/v1/expenses/{returned_expense['id']}/return-to-employee",
+        headers=auth_headers(accountant_token),
+        json={"reason": "Policy code missing."},
+    )
+    assert accounting_return_response.status_code == 200
+    assert accounting_return_response.json()["status"] == "returned_to_employee"
+
+
+def test_workflow_role_boundaries_and_invalid_payment_transition(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    _employee, employee_email, manager, manager_email, _accountant, accountant_email = create_workflow_users(db_session)
+    other_manager = create_user_with_role(db_session, email="other.manager@example.com", role="manager")
+    employee_token = login_user(client, employee_email)
+    manager_token = login_user(client, manager_email)
+    other_manager_token = login_user(client, other_manager.email)
+    accountant_token = login_user(client, accountant_email)
+
+    expense = create_expense(client, employee_token)
+    client.post(f"/api/v1/expenses/{expense['id']}/submit", headers=auth_headers(employee_token))
+
+    employee_approval_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/manager-approval",
+        headers=auth_headers(employee_token),
+        json={},
+    )
+    assert employee_approval_response.status_code == 403
+
+    other_manager_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/manager-approval",
+        headers=auth_headers(other_manager_token),
+        json={},
+    )
+    assert other_manager_response.status_code == 403
+
+    accountant_too_early_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/accounting-approval",
+        headers=auth_headers(accountant_token),
+        json={},
+    )
+    assert accountant_too_early_response.status_code == 409
+
+    manager_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/manager-approval",
+        headers=auth_headers(manager_token),
+        json={},
+    )
+    assert manager_response.status_code == 200
+    assert manager_response.json()["assigned_manager_id"] == str(manager.id)
+
+    employee_payment_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/payment-pending",
+        headers=auth_headers(employee_token),
+        json={},
+    )
+    assert employee_payment_response.status_code == 403
+
+    payment_too_early_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/payment-pending",
+        headers=auth_headers(accountant_token),
+        json={},
+    )
+    assert payment_too_early_response.status_code == 409
+
+
+def test_accountant_can_access_expense_after_accounting_rejection(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    _employee, employee_email, _manager, manager_email, _accountant, accountant_email = create_workflow_users(db_session)
+    employee_token = login_user(client, employee_email)
+    manager_token = login_user(client, manager_email)
+    accountant_token = login_user(client, accountant_email)
+
+    expense = create_expense(client, employee_token)
+    client.post(f"/api/v1/expenses/{expense['id']}/submit", headers=auth_headers(employee_token))
+    client.post(
+        f"/api/v1/expenses/{expense['id']}/manager-approval",
+        headers=auth_headers(manager_token),
+        json={},
+    )
+    rejection_response = client.post(
+        f"/api/v1/expenses/{expense['id']}/accounting-rejection",
+        headers=auth_headers(accountant_token),
+        json={"reason": "Expense is outside reimbursable policy."},
+    )
+    assert rejection_response.status_code == 200
+    assert rejection_response.json()["status"] == "accountant_rejected"
+
+    detail_response = client.get(
+        f"/api/v1/expenses/{expense['id']}",
+        headers=auth_headers(accountant_token),
+    )
+    assert detail_response.status_code == 200
+    assert detail_response.json()["status"] == "accountant_rejected"
+
+
+def test_audit_history_forbidden_for_unrelated_user(client: TestClient) -> None:
+    register_user(client, email="owner@example.com")
+    owner_token = login_user(client, "owner@example.com")
+    expense = create_expense(client, owner_token)
+
+    register_user(client, email="other@example.com")
+    other_token = login_user(client, "other@example.com")
+
+    response = client.get(
+        f"/api/v1/expenses/{expense['id']}/audit-log",
+        headers=auth_headers(other_token),
+    )
+
+    assert response.status_code == 403
